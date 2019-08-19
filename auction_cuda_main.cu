@@ -2,6 +2,7 @@
 #include <iostream>
 #include <string>
 #include <fstream>
+#include <cuda_profiler_api.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -45,7 +46,7 @@ __global__ void __launch_bounds__(1024, 16)
 linear_assignment_auction_kernel(const int num_nodes,
                                 const T* __restrict__ cost_ptr,
                                 int* solution_ptr, 
-                                T*  bids_ptr,
+                                float*  bids_ptr,
                                 char* stop_flag_ptr,
                                 const float auction_max_eps,
                                 const float auction_min_eps,
@@ -72,7 +73,7 @@ linear_assignment_auction_kernel(const int num_nodes,
 
     const T* __restrict__ data = cost_ptr + batch_id * num_nodes * num_nodes;
     int* solution_global = solution_ptr + batch_id * num_nodes; 
-    T* bids = bids_ptr + batch_id * num_nodes * num_nodes;
+    float* bids = bids_ptr + batch_id * num_nodes * num_nodes;
     char* stop_flag = stop_flag_ptr + batch_id;
     
     prices[node_id] = 0;
@@ -105,10 +106,10 @@ linear_assignment_auction_kernel(const int num_nodes,
 
             //phase 2: bidding
             if(person2item[node_id] == -1){
-                T top1_val = BIG_NEGATIVE; 
-                T top2_val = BIG_NEGATIVE; 
+                float top1_val = BIG_NEGATIVE; 
+                float top2_val = BIG_NEGATIVE; 
                 int top1_col; 
-                T tmp_val;
+                float tmp_val;
                 #pragma unroll 32
                 for (int col = 0; col < num_nodes; col++)
                 {
@@ -133,7 +134,7 @@ linear_assignment_auction_kernel(const int num_nodes,
                 {
                     top2_val = top1_val;
                 }
-                T bid = top1_val - top2_val + auction_eps;
+                float bid = top1_val - top2_val + auction_eps;
                 
                 atomicMax(sbids+top1_col, 1);
                 bids[num_nodes * top1_col + node_id] = bid;
@@ -144,10 +145,10 @@ linear_assignment_auction_kernel(const int num_nodes,
 
             //phase 3 : assignment
             if(sbids[node_id] != 0) {
-                T high_bid  = 0;
+                float high_bid  = 0;
                 int high_bidder = -1;
     
-                T tmp_bid = -1;
+                float tmp_bid = -1;
                 #pragma unroll 64
                 for(int i = 0; i < num_nodes; i++){
                     tmp_bid = bids[node_id * num_nodes + i];
@@ -207,9 +208,10 @@ void linear_assignment_auction(
                 int max_iterations)
 {
     //get pointers from scratch (size: num_nodes*num_nodes*sizeof(T))
-    T* bids           = (T* )scratch;
+    float* bids           = (float* )scratch;
 
     //launch solver
+    cudaProfilerStart();
     linear_assignment_auction_kernel<T><<<num_graphs, num_nodes, 4*num_nodes*sizeof(T)>>>
                                     (
                                         num_nodes,
@@ -222,7 +224,7 @@ void linear_assignment_auction(
                                         auction_factor,
                                         max_iterations
                                     );
-        
+    cudaProfilerStop();
     cudaDeviceSynchronize();
 
 }
@@ -248,7 +250,7 @@ void run_auction(
     char* stop_flags;
 
     cudaMalloc((void **)&data,          BATCH_SIZE * num_nodes*num_nodes   * sizeof(T));
-    cudaMalloc((void**) &scratch, num_graphs*(num_nodes*num_nodes)*sizeof(T));
+    cudaMalloc((void**) &scratch, num_graphs*(num_nodes*num_nodes)*sizeof(float));
     cudaMalloc((void**)& solutions, num_graphs*num_nodes*sizeof(int));
     cudaMalloc((void**)& stop_flags, sizeof(char) * num_graphs);
 
@@ -268,7 +270,6 @@ void run_auction(
                                 MAX_ITERATIONS);
 
     cudaDeviceSynchronize();
-
     timer_stop = get_globaltime();
     
 
