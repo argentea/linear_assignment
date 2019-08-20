@@ -13,6 +13,9 @@
 // --
 // Define constants
 
+#define DEBUG   1
+#define DEBUG_SHOW  5
+
 #ifndef __RUN_VARS
 #define __RUN_VARS
 #define AUCTION_MAX_EPS 10.0 // Larger values mean solution is more approximate
@@ -24,6 +27,11 @@
 #define NUM_NODES 128
 #define BIG_NEGATIVE -9999999
 #endif
+
+struct myedge{
+    char    item_id;
+    int     value;
+};
 
 typedef std::chrono::high_resolution_clock::rep hr_clock_rep;
 
@@ -55,6 +63,11 @@ linear_assignment_auction_kernel(const int num_nodes,
 {
     const int batch_id = blockIdx.x;
     const int node_id = threadIdx.x;
+
+    int local_front_edge_count = 0;
+    int local_edge_count = 0;
+    myedge* local_edges = NULL;
+
     __shared__ float auction_eps;
     __shared__ int num_iteration;
     __shared__ int num_assigned;
@@ -63,8 +76,10 @@ linear_assignment_auction_kernel(const int num_nodes,
     T* prices = (T*)s_data;
     int* sbids = (int*)(prices + num_nodes);
     int* person2item = sbids + num_nodes;
-    
     int* item2person = person2item + num_nodes;
+
+    char* edge_count = (char*)(item2person + num_nodes);
+    myedge* edges = (myedge*)(edge_count + num_nodes);
 
     if(node_id == 0){
         auction_eps = auction_max_eps;
@@ -77,6 +92,40 @@ linear_assignment_auction_kernel(const int num_nodes,
     char* stop_flag = stop_flag_ptr + batch_id;
     
     prices[node_id] = 0;
+
+    __syncthreads();
+    //count the items connected to bidder
+    edge_count[node_id] = 0;
+
+    for(int i = 0; i < num_nodes; i++){
+        if(data[node_id * num_nodes + i] >= 0)
+            edge_count[node_id]++;
+    } 
+    __syncthreads();
+
+    if(DEBUG && 0){
+        if(batch_id==2){
+            printf("%d %d\n",node_id,edge_count[node_id]);
+        }
+        __syncthreads();
+    }
+
+    //that's can be optmized
+
+    for(int i = 0; i <= node_id; i++){
+        local_front_edge_count += edge_count[i];
+    }
+    local_edges = edge_count[node_id];
+    __syncthreads();
+
+    if(DEBUG && 0){
+        if(batch_id==2){
+            printf("%d %d\n",node_id,local_front_edge_count);
+        }
+        __syncthreads();
+    }
+
+
 
     __syncthreads();
 
@@ -350,5 +399,6 @@ int main(int argc, char **argv)
 
     }
     delete[] h_data;
-    printf("[D] run_auction takes %g ms\n", (timer_stop-timer_start)*get_timer_period()); 
+    std::cerr << "[D] run_auction takes "<< (timer_stop-timer_start)*get_timer_period() <<  "ms\n";
+    //printf("[D] run_auction takes %g ms\n", (timer_stop-timer_start)*get_timer_period()); 
 }
