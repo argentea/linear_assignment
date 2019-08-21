@@ -32,6 +32,7 @@ int main(){
 	int max = 0;
 	int min = INT32_MAX;
 	int tem_val;
+	int countzero = 0;
 	for(int i = 0; i < node_num; i++){
 		count = 0;
 		for(int j = 0; j < node_num; j++){
@@ -39,10 +40,10 @@ int main(){
 			if(tem_val < 0){
 				continue;
 			}
-			/*if(tem_val == 0){
-				std::cout << "I find a zero at node_id " << i << " item_id " << j << std::endl;
-				return 0;
-			}*/
+			if(tem_val == 0){
+				countzero++;
+				continue;
+			}
 			count++;
 			if(tem_val < min){
 				min = tem_val;
@@ -55,12 +56,11 @@ int main(){
 		if(i != 0){
 			itemspnodes[i] += itemspnodes[i - 1];
 		}
+		if(i == node_num-1)
 		std::cout << i << " " << itemspnodes[i] << std::endl;
 	}
-	std::cout << max << " " << min << std::endl;
-	char check_message[] = "itemspnodes";
-	int id;
-
+	std::cout << max << " " << min <<"  " << countzero << std::endl;
+/*
 	int tem;
 	for(int i = 0; i < 128; i++){
 		std::cin >> id >> tem;
@@ -79,7 +79,7 @@ int main(){
 		}
 		
 	}
-
+*/
 	std::cerr << "You have done a good job!\n";
 	return 0;
 }

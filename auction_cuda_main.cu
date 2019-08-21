@@ -76,7 +76,7 @@ linear_assignment_auction_kernel(const int num_nodes,
 
     unsigned char* edge_count = (unsigned char*)(item2person + num_nodes);
     unsigned char* item_id = (unsigned char*)(edge_count + num_nodes);
-    int* benefit;
+    unsigned short* benefit;
 
     if(node_id == 0){
         auction_eps = auction_max_eps;
@@ -121,7 +121,7 @@ linear_assignment_auction_kernel(const int num_nodes,
     }
     __syncthreads();
 
-    benefit = (int *)(item_id + num_edge);
+    benefit = (unsigned short*)(item_id + num_edge);
 
     int tem = 0;
     for(int i = 0; i < num_nodes; i++){
@@ -294,7 +294,7 @@ void linear_assignment_auction(
 
     //launch solver
     cudaProfilerStart();
-    linear_assignment_auction_kernel<T><<<num_graphs, num_nodes, (num_nodes - 1)*num_nodes*sizeof(T)/2>>>
+    linear_assignment_auction_kernel<T><<<num_graphs, num_nodes, (num_nodes - 1)*num_nodes*sizeof(T)/3>>>
                                     (
                                         num_nodes,
                                         cost_matrics,
