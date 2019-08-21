@@ -28,10 +28,6 @@
 #define BIG_NEGATIVE -9999999
 #endif
 
-struct myedge{
-    char    item_id;
-    int     value;
-};
 
 typedef std::chrono::high_resolution_clock::rep hr_clock_rep;
 
@@ -66,20 +62,21 @@ linear_assignment_auction_kernel(const int num_nodes,
 
     int local_front_edge_count = 0;
     int local_edge_count = 0;
-    myedge* local_edges = NULL;
 
     __shared__ float auction_eps;
     __shared__ int num_iteration;
     __shared__ int num_assigned;
-    
+    __shared__ int num_edge;
+
     extern __shared__ unsigned char s_data[];
     T* prices = (T*)s_data;
     int* sbids = (int*)(prices + num_nodes);
     int* person2item = sbids + num_nodes;
     int* item2person = person2item + num_nodes;
 
-    char* edge_count = (char*)(item2person + num_nodes);
-    myedge* edges = (myedge*)(edge_count + num_nodes);
+    unsigned char* edge_count = (unsigned char*)(item2person + num_nodes);
+    unsigned char* item_id = (unsigned char*)(edge_count + num_nodes);
+    int* benefit;
 
     if(node_id == 0){
         auction_eps = auction_max_eps;
@@ -112,11 +109,36 @@ linear_assignment_auction_kernel(const int num_nodes,
 
     //that's can be optmized
 
-    for(int i = 0; i <= node_id; i++){
+    for(int i = 0; i < node_id; i++){
         local_front_edge_count += edge_count[i];
     }
-    local_edges = edge_count[node_id];
+    
+    //Is that faster than read from share_memory?
+    local_edge_count = edge_count[node_id];
+
+    if(node_id == num_nodes -1){
+        num_edge = edge_count[node_id - 1] + local_front_edge_count;
+    }
     __syncthreads();
+
+    benefit = (int *)(item_id + num_edge);
+
+    int tem = 0;
+    for(int i = 0; i < num_nodes; i++){
+        if(data[node_id * num_nodes + i] >= 0){
+            item_id[local_front_edge_count + tem] = i;
+            benefit[local_front_edge_count + tem] = data[node_id*num_nodes + i];
+            tem++;
+        }
+    }
+    __syncthreads();
+
+
+    if(DEBUG && 0){
+        if(batch_id == 2){
+            printf("%d %d\n",num_edge,node_id);
+        }
+    }
 
     if(DEBUG && 0){
         if(batch_id==2){
@@ -126,9 +148,24 @@ linear_assignment_auction_kernel(const int num_nodes,
     }
 
 
-
+    /*
+    int tem_count = 0;
+    for(int i = 0; i < num_nodes; i++){
+        if(data[node_id * num_nodes + i] >= 0){
+            local_edges[tem_count].item_id = i;
+            local_edges[tem_count].value = data[node_id * num_nodes + i];
+            tem_count++;
+        }
+        else{
+            continue;
+        }
+        //that's may be faster
+        if(tem_count >= local_edge_count){
+            break;
+        }
+    }
     __syncthreads();
-
+    */
     while(auction_eps >= auction_min_eps && num_iteration < max_iterations)
     {
         //clear num_assigned
@@ -158,20 +195,17 @@ linear_assignment_auction_kernel(const int num_nodes,
                 float top1_val = BIG_NEGATIVE; 
                 float top2_val = BIG_NEGATIVE; 
                 int top1_col; 
+                unsigned char tem_id;
                 float tmp_val;
                 #pragma unroll 32
-                for (int col = 0; col < num_nodes; col++)
+                for (int i = 0; i < local_edge_count; i++)
                 {
-                    tmp_val = data[node_id * num_nodes + col]; 
-                    if (tmp_val < 0)
-                    {
-                        continue;
-                    }
-                    tmp_val = tmp_val - prices[col];
+                    tem_id = item_id[local_front_edge_count + i];
+                    tmp_val = benefit[local_front_edge_count + i] - prices[tem_id]; 
                     if (tmp_val >= top1_val)
                     {
                         top2_val = top1_val;
-                        top1_col = col;
+                        top1_col = tem_id;
                         top1_val = tmp_val;
                     }
                     else if (tmp_val > top2_val)
@@ -218,7 +252,6 @@ linear_assignment_auction_kernel(const int num_nodes,
                 person2item[high_bidder]          = node_id;
                 item2person[node_id]              = high_bidder;
             }
-            __syncthreads();
             
             //update iteration
             if(node_id == 0){
@@ -261,7 +294,7 @@ void linear_assignment_auction(
 
     //launch solver
     cudaProfilerStart();
-    linear_assignment_auction_kernel<T><<<num_graphs, num_nodes, 4*num_nodes*sizeof(T)>>>
+    linear_assignment_auction_kernel<T><<<num_graphs, num_nodes, (num_nodes - 1)*num_nodes*sizeof(T)/2>>>
                                     (
                                         num_nodes,
                                         cost_matrics,

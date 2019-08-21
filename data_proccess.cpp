@@ -61,12 +61,23 @@ int main(){
 	char check_message[] = "itemspnodes";
 	int id;
 
+	int tem;
 	for(int i = 0; i < 128; i++){
-		std::cin >> id >> count;
-		if(count!=itemspnodes[id]){
-			std::cerr << "You let GPU make an error!! at node_id "<< id <<"\n";
-			return 0;
+		std::cin >> id >> tem;
+		if(id != 0){
+			if(tem!=itemspnodes[id -1]){
+				std::cerr << "You let GPU make an error!! at node_id "<< id <<"with right " << itemspnodes[id-1] << "  " << tem <<"\n";
+				return 0;
+			}
 		}
+		else
+		{
+			if(tem != 0){
+				std::cerr << "You let GPU make an error!! at node_id "<< id <<"with right " << 0<< " " << tem <<"\n";
+				return 0;
+			}
+		}
+		
 	}
 
 	std::cerr << "You have done a good job!\n";
