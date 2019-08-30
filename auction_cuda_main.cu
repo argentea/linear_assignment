@@ -46,7 +46,6 @@ __global__ void __launch_bounds__(1024, 16)
 linear_assignment_auction_kernel(const int num_nodes,
                                 const T* __restrict__ cost_ptr,
                                 int* solution_ptr, 
-                                float*  bids_ptr,
                                 char* stop_flag_ptr,
                                 const float auction_max_eps,
                                 const float auction_min_eps,
@@ -60,11 +59,14 @@ linear_assignment_auction_kernel(const int num_nodes,
     __shared__ int num_assigned;
     
     extern __shared__ unsigned char s_data[];
-    T* prices = (T*)s_data;
+    T* prices = (T*)s_data;    
     int* sbids = (int*)(prices + num_nodes);
     int* person2item = sbids + num_nodes;
-    
     int* item2person = person2item + num_nodes;
+    int* bidder2item = item2person + num_nodes;
+    float* shared_bids = (float*)bidder2item + num_nodes;
+
+
 
     if(node_id == 0){
         auction_eps = auction_max_eps;
@@ -73,7 +75,7 @@ linear_assignment_auction_kernel(const int num_nodes,
 
     const T* __restrict__ data = cost_ptr + batch_id * num_nodes * num_nodes;
     int* solution_global = solution_ptr + batch_id * num_nodes; 
-    float* bids = bids_ptr + batch_id * num_nodes * num_nodes;
+    //float* bids = bids_ptr + batch_id * num_nodes * num_nodes;
     char* stop_flag = stop_flag_ptr + batch_id;
     
     prices[node_id] = 0;
@@ -97,9 +99,13 @@ linear_assignment_auction_kernel(const int num_nodes,
         {
             //phase 1: init bid and bids
             
-            for(int i = node_id; i < num_nodes*num_nodes; i += blockDim.x){
+            /*for(int i = node_id; i < num_nodes*num_nodes; i += blockDim.x){
                 bids[i] = 0;
-            }
+            }*/
+
+            shared_bids[node_id] = 0;
+            bidder2item[node_id] = 0;
+
             sbids[node_id] = 0;
             
             __syncthreads();
@@ -137,34 +143,46 @@ linear_assignment_auction_kernel(const int num_nodes,
                 float bid = top1_val - top2_val + auction_eps;
                 
                 atomicMax(sbids+top1_col, 1);
-                bids[num_nodes * top1_col + node_id] = bid;
-                
+                //bids[num_nodes * top1_col + node_id] = bid;
+                shared_bids[node_id] = bid;
+                bidder2item[node_id] = top1_col;
             }
 
             __syncthreads();
 
             //phase 3 : assignment
-            if(sbids[node_id] != 0) {
-                float high_bid  = 0;
-                int high_bidder = -1;
+            
+            float high_bid  = 0;
+            int high_bidder = -1;
     
-                float tmp_bid = -1;
-                #pragma unroll 64
-                for(int i = 0; i < num_nodes; i++){
-                    tmp_bid = bids[node_id * num_nodes + i];
+            float tmp_bid = -1;
+            for(int i = 0; i < num_nodes; i++){
+                if(bidder2item[i] == node_id){
+                    tmp_bid = shared_bids[i];
                     if(tmp_bid > high_bid){
-                        high_bid    = tmp_bid;
+                        high_bid = tmp_bid;
                         high_bidder = i;
                     }
                 }
-    
+            }
+
+
+            /*#pragma unroll 64
+            for(int i = 0; i < num_nodes; i++){
+                tmp_bid = bids[node_id * num_nodes + i];
+                if(tmp_bid > high_bid){
+                    high_bid    = tmp_bid;
+                    high_bidder = i;
+                }
+            }*/
+            if(high_bidder != -1){
                 int current_person = item2person[node_id];
                 if(current_person >= 0){
                     person2item[current_person] = -1;
                 } else {
                     atomicAdd(&num_assigned, 1);
                 }
-    
+                
                 prices[node_id]                += high_bid;
                 person2item[high_bidder]          = node_id;
                 item2person[node_id]              = high_bidder;
@@ -200,7 +218,6 @@ void linear_assignment_auction(
                 int* solutions,
                 const int num_graphs,
                 const int num_nodes,
-                char* scratch,
                 char *stop_flags,
                 float auction_max_eps,
                 float auction_min_eps,
@@ -208,16 +225,15 @@ void linear_assignment_auction(
                 int max_iterations)
 {
     //get pointers from scratch (size: num_nodes*num_nodes*sizeof(T))
-    float* bids           = (float* )scratch;
+    //float* bids           = (float* )scratch;
 
     //launch solver
     cudaProfilerStart();
-    linear_assignment_auction_kernel<T><<<num_graphs, num_nodes, 4*num_nodes*sizeof(T)>>>
+    linear_assignment_auction_kernel<T><<<num_graphs, num_nodes, 6*num_nodes*sizeof(T)>>>
                                     (
                                         num_nodes,
                                         cost_matrics,
                                         solutions,
-                                        bids,
                                         stop_flags,
                                         auction_max_eps,
                                         auction_min_eps,
@@ -245,12 +261,10 @@ void run_auction(
 )
 {
     T *data;
-    char* scratch;
     int* solutions;
     char* stop_flags;
 
     cudaMalloc((void **)&data,          BATCH_SIZE * num_nodes*num_nodes   * sizeof(T));
-    cudaMalloc((void**) &scratch, num_graphs*(num_nodes*num_nodes)*sizeof(float));
     cudaMalloc((void**)& solutions, num_graphs*num_nodes*sizeof(int));
     cudaMalloc((void**)& stop_flags, sizeof(char) * num_graphs);
 
@@ -262,7 +276,6 @@ void run_auction(
                                 solutions,
                                 num_graphs,
                                 num_nodes,
-                                scratch,
                                 stop_flags,
                                 auction_max_eps,
                                 auction_min_eps,
@@ -279,7 +292,6 @@ void run_auction(
     }
 
     cudaFree(data);
-    cudaFree(scratch);
     cudaFree(solutions);
     cudaFree(stop_flags);
     return;
