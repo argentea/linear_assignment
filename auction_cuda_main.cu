@@ -201,7 +201,7 @@ linear_assignment_auction_kernel(const int num_nodes,
                     unsigned char tmp_id;
                     float tmp_val;
                     
-                    for (int i = 0; i < num_nodes; i++)
+                    for (int i = 0; i < local_edge_count; i++)
                     {
                         tmp_id = item_id[local_front_edge_count + i];
                         tmp_val = benefit[local_front_edge_count + i];
