@@ -204,7 +204,13 @@ linear_assignment_auction_kernel(const int num_nodes,
                     for (int i = 0; i < num_nodes; i++)
                     {
                         tmp_id = item_id[local_front_edge_count + i];
-                        tmp_val = benefit[local_front_edge_count + i] - prices[tmp_id];
+                        tmp_val = benefit[local_front_edge_count + i];
+                        
+                        if(tmp_val < 0)
+                        {
+                            continue;
+                        }
+                        tmp_val -= prices[tmp_id];
                         if (tmp_val >= top1_val)
                         {
                             top2_val = top1_val;
