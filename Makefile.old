@@ -297,4 +297,3 @@ clean:
 	rm -f auction_cuda_main auction_cuda_main.o
 
 clobber: clean
-

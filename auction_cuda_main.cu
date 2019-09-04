@@ -3,7 +3,6 @@
 #include <string>
 #include <fstream>
 #include <cuda_profiler_api.h>
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <vector>
@@ -272,6 +271,7 @@ void run_auction(
     
     timer_start = get_globaltime();
 
+    cudaProfilerStart();
     linear_assignment_auction<T>(data,
                                 solutions,
                                 num_graphs,
@@ -282,6 +282,7 @@ void run_auction(
                                 auction_factor,
                                 MAX_ITERATIONS);
 
+    cudaProfilerStop();
     cudaDeviceSynchronize();
     timer_stop = get_globaltime();
     
