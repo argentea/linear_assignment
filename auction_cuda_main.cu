@@ -12,7 +12,7 @@
 // --
 // Define constants
 
-#define USE_DATA_OPTIMIZATION   1
+//#define USE_DATA_OPTIMIZATION   1
 
 #ifndef __RUN_VARS
 #define __RUN_VARS
@@ -68,8 +68,7 @@ linear_assignment_auction_kernel(const int num_nodes,
     
     extern __shared__ unsigned char s_data[];
     T* prices = (T*)s_data;    
-    int* sbids = (int*)(prices + num_nodes);
-    int* person2item = sbids + num_nodes;
+    int* person2item = (int*)(prices + num_nodes);
     int* item2person = person2item + num_nodes;
     int* bidder2item = item2person + num_nodes;
     float* shared_bids = (float*)bidder2item + num_nodes;
@@ -149,10 +148,7 @@ linear_assignment_auction_kernel(const int num_nodes,
 
             shared_bids[node_id] = 0;
             bidder2item[node_id] = 0;
-
-            sbids[node_id] = 0;
             
-            __syncthreads();
 
             //phase 2: bidding
             #ifndef USE_DATA_OPTIMIZATION
@@ -188,7 +184,6 @@ linear_assignment_auction_kernel(const int num_nodes,
                     }
                     float bid = top1_val - top2_val + auction_eps;
 
-                    atomicMax(sbids+top1_col, 1);
                     shared_bids[node_id] = bid;
                     bidder2item[node_id] = top1_col;
                 }
@@ -200,7 +195,6 @@ linear_assignment_auction_kernel(const int num_nodes,
                     int top1_col; 
                     unsigned char tmp_id;
                     float tmp_val;
-                    
                     for (int i = 0; i < local_edge_count; i++)
                     {
                         tmp_id = item_id[local_front_edge_count + i];
@@ -227,8 +221,6 @@ linear_assignment_auction_kernel(const int num_nodes,
                         top2_val = top1_val;
                     }
                     float bid = top1_val - top2_val + auction_eps;
-
-                    atomicMax(sbids+top1_col, 1);
                     shared_bids[node_id] = bid;
                     bidder2item[node_id] = top1_col;
                 }
@@ -318,7 +310,7 @@ void linear_assignment_auction(
                                         max_iterations
                                     );
     #else
-    linear_assignment_auction_kernel<T><<<num_graphs, num_nodes, ((num_nodes)*num_nodes)*sizeof(T)/3>>>
+    linear_assignment_auction_kernel<T><<<num_graphs, num_nodes, ((num_nodes-4)*num_nodes)*sizeof(T)/3>>>
                                     (
                                         num_nodes,
                                         cost_matrics,
