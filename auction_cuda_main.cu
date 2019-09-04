@@ -74,7 +74,7 @@ linear_assignment_auction_kernel(const int num_nodes,
 
     const T* __restrict__ data = cost_ptr + batch_id * num_nodes * num_nodes;
     int* solution_global = solution_ptr + batch_id * num_nodes; 
-    //float* bids = bids_ptr + batch_id * num_nodes * num_nodes;
+    
     char* stop_flag = stop_flag_ptr + batch_id;
     
     prices[node_id] = 0;
