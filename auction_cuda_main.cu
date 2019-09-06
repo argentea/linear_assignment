@@ -12,7 +12,7 @@
 // --
 // Define constants
 
-//#define USE_DATA_OPTIMIZATION   1
+#define USE_DATA_OPTIMIZATION
 
 #ifndef __RUN_VARS
 #define __RUN_VARS
@@ -310,7 +310,7 @@ void linear_assignment_auction(
                                         max_iterations
                                     );
     #else
-    linear_assignment_auction_kernel<T><<<num_graphs, num_nodes, ((num_nodes-4)*num_nodes)*sizeof(T)/3>>>
+    linear_assignment_auction_kernel<T><<<num_graphs, num_nodes, ((num_nodes-3)*num_nodes)*sizeof(T)/2>>>
                                     (
                                         num_nodes,
                                         cost_matrics,
@@ -383,8 +383,10 @@ void run_auction(
 
 
 template <typename T>
-int load_data(T *raw_data) {
-    std::ifstream input_file("graph4", std::ios_base::in);
+int load_data(T *raw_data, int mat_id) {
+    char mat_name[20] = "../data/mat";
+    sprintf(mat_name + 11,"%d",mat_id);
+    std::ifstream input_file(mat_name, std::ios_base::in);
 
     int i = 0;
     T val;
@@ -408,7 +410,7 @@ int main(int argc, char **argv)
     
     for (int i = 0; i < BATCH_SIZE; ++i)
     {
-        num_nodes = load_data<int>(h_data + i*num_nodes*num_nodes);
+        num_nodes = load_data<int>(h_data + i*num_nodes*num_nodes,i);
         h_person2item[i] = (int *)malloc(sizeof(int) * num_nodes);
     }
 
