@@ -12,7 +12,7 @@
 // --
 // Define constants
 
-#define USE_DATA_OPTIMIZATION
+//#define USE_DATA_OPTIMIZATION
 
 #ifndef __RUN_VARS
 #define __RUN_VARS
