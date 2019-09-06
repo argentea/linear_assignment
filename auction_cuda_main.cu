@@ -300,8 +300,10 @@ void run_auction(
 
 
 template <typename T>
-int load_data(T *raw_data) {
-    std::ifstream input_file("graph4", std::ios_base::in);
+int load_data(T *raw_data ,int mat_id) {
+    char mat_name[20] = "data/mat";
+    sprintf(mat_name + 8,"%d",mat_id);
+    std::ifstream input_file(mat_name, std::ios_base::in);
 
     int i = 0;
     T val;
@@ -316,7 +318,7 @@ int load_data(T *raw_data) {
 int main(int argc, char **argv)
 {
 
-    std::cerr << "loading ./graph4" << std::endl;
+    std::cerr << "loading data" << std::endl;
     int num_nodes = NUM_NODES;
     int num_graphs = BATCH_SIZE;
     int *h_data = new int[num_graphs*num_nodes*num_nodes];
@@ -325,7 +327,7 @@ int main(int argc, char **argv)
     
     for (int i = 0; i < BATCH_SIZE; ++i)
     {
-        num_nodes = load_data<int>(h_data + i*num_nodes*num_nodes);
+        num_nodes = load_data<int>(h_data + i*num_nodes*num_nodes, i);
         h_person2item[i] = (int *)malloc(sizeof(int) * num_nodes);
     }
 
